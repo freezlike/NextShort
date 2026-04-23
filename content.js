@@ -1,54 +1,53 @@
 let errorTimer = 0;
 let lastTime = -1;
 
-function checkVideoStatus() {
-    // 1. --- ANTI-AFK BYPASS ---
-    // Ferme la popup "Vidéo mise en pause. Continuer la lecture ?"
-    const confirmButton = document.querySelector('yt-confirm-dialog-renderer #confirm-button') || document.querySelector('.yt-confirm-dialog-renderer button');
-    if (confirmButton && confirmButton.offsetParent !== null) { 
-        console.log("Anti-AFK activé : clic sur Continuer...");
-        confirmButton.click();
-        return;
-    }
-
-    // 2. --- AUTO-SKIP LOGIC ---
-    // Cible le conteneur du Short actuellement visible
-    const activeContainer = document.querySelector('ytd-reel-video-renderer[is-active]');
-    if (!activeContainer) return;
+setInterval(() => {
+    // 1. Target the currently active video container
+    const activeContainer = document.querySelector('ytd-reel-video-renderer[is-active]') || document;
     
-    const video = activeContainer.querySelector('video');
+    // Target the "Next" button for Shorts
     const nextButton = document.querySelector('#navigation-button-down button') || document.querySelector('#navigation-button-down');
 
-    if (!video || !nextButton) return;
+    // If there's no next button on the page, we can't do anything
+    if (!nextButton) return;
 
-    // Désactive la boucle
+    const video = activeContainer.querySelector('video');
+
+    // 2. THE FIX: Detect if the video element is completely missing (Blocked, age-restricted, or removed)
+    if (!video) {
+        errorTimer++;
+        if (errorTimer >= 5) {
+            console.log("Video element missing (blocked or error), skipping to the next one.");
+            nextButton.click();
+            errorTimer = 0;
+        }
+        return; // Stop here for this cycle
+    }
+
+    // 3. Prevent the video from looping
     video.loop = false;
 
-    // Passe au Short suivant si terminé
+    // 4. If the video has ended normally, click the next button
     if (video.ended) {
-        console.log("Fin de la vidéo, passage à la suivante.");
         nextButton.click();
         errorTimer = 0;
         return;
     }
 
-    // 3. --- ANTI-FREEZE LOGIC ---
-    // Si la vidéo est censée jouer mais n'avance pas (et qu'elle a déjà commencé)
-    if (!video.paused && video.currentTime === lastTime && video.currentTime > 0) {
+    // 5. Detect if the video is stuck buffering infinitely
+    if (!video.paused && video.currentTime === lastTime) {
         errorTimer++;
-        if (errorTimer >= 10) { // Environ 5 secondes (puisque le check se fait toutes les 500ms)
-            console.log("Vidéo bloquée détectée, saut d'urgence.");
+        if (errorTimer >= 5) {
+            console.log("Video is stuck buffering, skipping to the next one.");
             nextButton.click();
             errorTimer = 0;
         }
     } else {
-        errorTimer = 0; 
+        errorTimer = 0; // Reset the timer if everything is fine
     }
     
     lastTime = video.currentTime;
-}
 
-// Lancement de la boucle toutes les 500 millisecondes (plus réactif)
-setInterval(checkVideoStatus, 500);
+}, 1000);
 
-console.log("✅ NextShort V2 (Stable) loaded!");
+console.log("NextShort: Auto-Swipe loaded successfully!");
