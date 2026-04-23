@@ -1,42 +1,43 @@
 let errorTimer = 0;
 let lastTime = -1;
 
-// 1. We put the main logic inside a function
 function checkVideoStatus() {
-    // --- ANTI-AFK BYPASS ---
-    // If YouTube asks "Video paused. Continue watching?", auto-click "Yes"
+    // 1. --- ANTI-AFK BYPASS ---
+    // Ferme la popup "Vidéo mise en pause. Continuer la lecture ?"
     const confirmButton = document.querySelector('yt-confirm-dialog-renderer #confirm-button') || document.querySelector('.yt-confirm-dialog-renderer button');
-    if (confirmButton && confirmButton.offsetParent !== null) { // Checks if the button is visible
-        console.log("Anti-AFK popup detected. Clicking continue...");
+    if (confirmButton && confirmButton.offsetParent !== null) { 
+        console.log("Anti-AFK activé : clic sur Continuer...");
         confirmButton.click();
         return;
     }
 
-    // --- AUTO-SKIP LOGIC ---
-    // Target the currently active video on the screen
-    const activeContainer = document.querySelector('ytd-reel-video-renderer[is-active]') || document;
-    const video = activeContainer.querySelector('video');
+    // 2. --- AUTO-SKIP LOGIC ---
+    // Cible le conteneur du Short actuellement visible
+    const activeContainer = document.querySelector('ytd-reel-video-renderer[is-active]');
+    if (!activeContainer) return;
     
-    // Target the "Next" button for Shorts
+    const video = activeContainer.querySelector('video');
     const nextButton = document.querySelector('#navigation-button-down button') || document.querySelector('#navigation-button-down');
 
     if (!video || !nextButton) return;
 
-    // Prevent the video from looping
+    // Désactive la boucle
     video.loop = false;
 
-    // If the video has ended, click the next button
+    // Passe au Short suivant si terminé
     if (video.ended) {
+        console.log("Fin de la vidéo, passage à la suivante.");
         nextButton.click();
         errorTimer = 0;
         return;
     }
 
-    // Detect if the video is stuck, unavailable, or buffering infinitely
-    if (!video.paused && video.currentTime === lastTime) {
+    // 3. --- ANTI-FREEZE LOGIC ---
+    // Si la vidéo est censée jouer mais n'avance pas (et qu'elle a déjà commencé)
+    if (!video.paused && video.currentTime === lastTime && video.currentTime > 0) {
         errorTimer++;
-        if (errorTimer >= 5) {
-            console.log("Video is stuck or unavailable, skipping to the next one.");
+        if (errorTimer >= 10) { // Environ 5 secondes (puisque le check se fait toutes les 500ms)
+            console.log("Vidéo bloquée détectée, saut d'urgence.");
             nextButton.click();
             errorTimer = 0;
         }
@@ -47,21 +48,7 @@ function checkVideoStatus() {
     lastTime = video.currentTime;
 }
 
-// 2. THE WEB WORKER HACK (Anti-Sleep for background tabs)
-// We create a separate background thread just for the timer
-const workerCode = `
-    setInterval(() => {
-        postMessage('tick');
-    }, 1000);
-`;
+// Lancement de la boucle toutes les 500 millisecondes (plus réactif)
+setInterval(checkVideoStatus, 500);
 
-// Convert the string into a Blob URL that the browser can run as a worker
-const blob = new Blob([workerCode], { type: 'application/javascript' });
-const worker = new Worker(URL.createObjectURL(blob));
-
-// Every time the worker "ticks" (every 1 second), run our function
-worker.onmessage = () => {
-    checkVideoStatus();
-};
-
-console.log("✅ NextShort (Background/Anti-Sleep Edition) loaded!");
+console.log("✅ NextShort V2 (Stable) loaded!");
