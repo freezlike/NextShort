@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "NextShort: Auto-Swipe & Anti-Freeze",
+  "version": "1.0",
+  "description": "Automatically skips to the next YouTube Short when it ends or gets stuck. Enjoy a premium, hands-free continuous viewing experience.",
+  "content_scripts": [
+    {
+      "matches": ["*://*.youtube.com/*"],
+      "js": ["content.js"]
+    }
+  ],
+  "icons": {
+    "128": "icon.png"
+  }
+}
