@@ -1,61 +1,80 @@
+// 1. --- ANTI-VEILLE YOUTUBE (MAIN WORLD INJECTION) ---
+// Ce bloc fait croire à la page YouTube que l'onglet est toujours visible
+const spoofVisibility = document.createElement('script');
+spoofVisibility.textContent = `
+    Object.defineProperty(document, 'visibilityState', { get: () => 'visible' });
+    Object.defineProperty(document, 'hidden', { get: () => false });
+    window.addEventListener('visibilitychange', (e) => e.stopImmediatePropagation(), true);
+`;
+document.documentElement.appendChild(spoofVisibility);
+spoofVisibility.remove();
+
+// 2. --- LOGIQUE PRINCIPALE ---
 let errorTimer = 0;
 let lastTime = -1;
+let observedVideo = null; // Permet de mémoriser la vidéo qu'on écoute
 
 setInterval(() => {
-    // 1. Target the currently active video container
     const activeContainer = document.querySelector('ytd-reel-video-renderer[is-active]') || document;
-    
-    // Target the standard "Next" button for Shorts
     const nextButton = document.querySelector('#navigation-button-down button') || document.querySelector('#navigation-button-down');
 
     if (!nextButton) return;
 
-    // 2. THE NEW FIX: Detect the "Video unavailable / Skip video" overlay from your screenshot
+    // Gérer l'écran d'erreur (Video unavailable)
     const skipErrorButton = activeContainer.querySelector('yt-playability-error-supported-renderers button') || activeContainer.querySelector('#error-screen button');
     if (skipErrorButton && skipErrorButton.offsetParent !== null) {
-        console.log("Video unavailable interstitial detected. Clicking 'Skip video'...");
         skipErrorButton.click();
         errorTimer = 0;
-        return; // Stop here, the click will naturally move to the next video
+        return;
     }
 
     const video = activeContainer.querySelector('video');
 
-    // 3. Detect if the video element is completely missing for any other reason
+    // Gérer la disparition complète du lecteur
     if (!video) {
         errorTimer++;
         if (errorTimer >= 5) {
-            console.log("Video element missing, skipping to the next one.");
             nextButton.click();
             errorTimer = 0;
         }
         return; 
     }
 
-    // 4. Prevent the video from looping
     video.loop = false;
 
-    // 5. If the video has ended normally, click the next button
+    // 3. --- LE SECRET POUR L'ARRIÈRE-PLAN ---
+    // On attache un événement natif à la vidéo. Quand elle se termine, 
+    // le navigateur déclenche ça immédiatement, même si l'onglet est inactif !
+    if (video !== observedVideo) {
+        observedVideo = video;
+        video.addEventListener('ended', () => {
+            console.log("Fin de vidéo détectée en arrière-plan. Suivante !");
+            nextButton.click();
+            errorTimer = 0;
+        }, { once: true }); // "once: true" garantit que l'événement ne s'ajoute qu'une seule fois
+    }
+
+    // Sécurité de secours au cas où l'événement rate
     if (video.ended) {
         nextButton.click();
         errorTimer = 0;
         return;
     }
 
-    // 6. Detect if the video is stuck buffering infinitely
+    // Anti-Freeze (bloqué en chargement)
     if (!video.paused && video.currentTime === lastTime) {
         errorTimer++;
         if (errorTimer >= 5) {
-            console.log("Video is stuck buffering, skipping to the next one.");
+            console.log("Vidéo bloquée, passage à la suivante.");
             nextButton.click();
             errorTimer = 0;
         }
     } else {
-        errorTimer = 0; // Reset the timer if everything is fine
+        errorTimer = 0; 
     }
     
     lastTime = video.currentTime;
 
 }, 1000);
 
-console.log("NextShort: Auto-Swipe loaded successfully!");
+console.log("NextShort: Auto-Swipe loaded!");
